@@ -4,26 +4,30 @@ const classController = require('../controllers/classController');
 const authMiddleware = require('../middleware/authMiddleware');
 const gradeController = require('../controllers/gradeController');
 const predictController = require('../controllers/predictController');
+
+// --- MULTER CONFIG (ANTI CRASH VERCEL) ---
 const multer = require('multer');
 const path = require('path');
 const os = require('os');
 
-// --- PENTING: GUNAKAN FOLDER TMP SYSTEM ---
-const tempDir = os.tmpdir();
+// Simpan langsung ke folder TMP sistem
+// Jangan bikin subfolder (mkdir) di Vercel karena akan EROFS
+const tempDir = os.tmpdir(); 
 
 const storage = multer.diskStorage({
     destination: function (req, file, cb) {
-        cb(null, tempDir); // Arahkan ke /tmp agar tidak EROFS
+        cb(null, tempDir);
     },
     filename: function (req, file, cb) {
+        // Sanitasi nama file
         const cleanName = file.originalname.replace(/[^a-zA-Z0-9.]/g, '_');
-        cb(null, `${Date.now()}-${cleanName}`);
+        cb(null, `cls-${Date.now()}-${cleanName}`);
     }
 });
 
 const upload = multer({ storage: storage });
+// ------------------------------------------
 
-// --- ROUTES ---
 router.use(authMiddleware.protect);
 router.use(authMiddleware.restrictTo('guru'));
 
@@ -31,15 +35,17 @@ router.route('/')
     .get(classController.getMyClasses)
     .post(classController.createClass);
 
-// Import CSV
+// Import Routes
 router.post('/:id/import-students', upload.single('file'), classController.importStudents);
 router.post('/tugas/:idTugas/import-quiz', upload.single('file'), gradeController.importSoalQuiz);
 
-// Create Tugas (Upload Soal)
+// Task Management Routes
 router.post('/tugas', upload.single('file_soal'), gradeController.createTugas);
 router.put('/tugas/:id', upload.single('file_soal'), gradeController.editTugas);
 
-// Standard Routes
+// Standard Routes (Tanpa Upload)
+router.get('/', authMiddleware.restrictTo('guru'), classController.getMyClasses);
+router.post('/', classController.createClass);
 router.delete('/:id', classController.deleteClass);
 router.get('/:id/stats', authMiddleware.restrictTo('guru'), classController.getClassStats);
 router.get('/:id/students', classController.getClassStudents);

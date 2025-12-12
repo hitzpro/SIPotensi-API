@@ -6,17 +6,17 @@ const multer = require('multer');
 const path = require('path');
 const os = require('os');
 
-// --- PENTING: GUNAKAN FOLDER TMP SYSTEM ---
+// --- MULTER CONFIG (ANTI CRASH VERCEL) ---
 const tempDir = os.tmpdir(); 
 
-// A. Config Profile Photo
+// Config Profile
 const storageProfile = multer.diskStorage({
     destination: (req, file, cb) => {
-        cb(null, tempDir); // Simpan di /tmp
+        cb(null, tempDir);
     },
     filename: (req, file, cb) => {
         const ext = path.extname(file.originalname);
-        cb(null, `profile-${req.user.id}-${Date.now()}${ext}`);
+        cb(null, `p-${req.user.id}-${Date.now()}${ext}`);
     }
 });
 
@@ -25,26 +25,27 @@ const uploadProfile = multer({
     limits: { fileSize: 2 * 1024 * 1024 }
 });
 
-// B. Config Task Upload
+// Config Tugas
 const storageTask = multer.diskStorage({
     destination: (req, file, cb) => {
-        cb(null, tempDir); // Simpan di /tmp
+        cb(null, tempDir);
     },
     filename: (req, file, cb) => {
         const cleanName = file.originalname.replace(/[^a-zA-Z0-9.]/g, '_');
-        cb(null, `tugas-${req.user.id}-${Date.now()}-${cleanName}`);
+        cb(null, `t-${req.user.id}-${Date.now()}-${cleanName}`);
     }
 });
 
 const uploadTask = multer({ storage: storageTask }); 
+// ------------------------------------------
 
-// --- ROUTES ---
+// Middleware
 router.use(authMiddleware.protect);
 
-// Endpoint Preview Task (Boleh Guru & Siswa)
+// Shared Route (Guru & Siswa)
 router.get('/tasks/:idTugas', authMiddleware.restrictTo('siswa', 'guru'), studentController.getTaskDetail);
 
-// Endpoint Khusus Siswa
+// Student Only Routes
 router.use(authMiddleware.restrictTo('siswa'));
 
 router.get('/dashboard', studentController.getDashboard);
