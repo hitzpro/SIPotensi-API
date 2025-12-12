@@ -1,36 +1,38 @@
-    // app.js
-    const express = require('express');
-    const cors = require('cors');
-    const morgan = require('morgan');
-    const path = require('path');
-    const authRoutes = require('./routes/authRoutes');
-    const classRoutes = require('./routes/classRoutes');
-    const dashboardRoutes = require('./routes/dashboardRoutes');
-    const studentRoutes = require('./routes/studentRoutes');
-    const notificationRoutes = require('./routes/notificationRoutes');
-    const fs = require('fs');
+const express = require('express');
+const cors = require('cors');
+const morgan = require('morgan');
+const path = require('path');
+const fs = require('fs'); // Tambahkan fs
 
-    const app = express();
+const authRoutes = require('./routes/authRoutes');
+const classRoutes = require('./routes/classRoutes');
+const dashboardRoutes = require('./routes/dashboardRoutes');
+const studentRoutes = require('./routes/studentRoutes');
+const notificationRoutes = require('./routes/notificationRoutes');
 
-    // Middleware
-    app.use(cors()); // Agar bisa diakses dari frontend nanti
-    app.use(morgan('dev')); // Logging request di terminal
-    app.use(express.json()); // Agar bisa baca req.body format JSON
-    app.use(express.urlencoded({ extended: true })); // Untuk handle form-data
+const app = express();
 
-    // Routes
-    if (fs.existsSync(path.join(__dirname, 'uploads'))) {
-        app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
-    }
-    app.use('/api/auth', authRoutes);
-    app.use('/api/classes', classRoutes);
-    app.use('/api/dashboard', dashboardRoutes);
-    app.use('/api/student', studentRoutes);
-    app.use('/api/notifications', notificationRoutes);
+app.use(cors());
+app.use(morgan('dev'));
+app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
 
-    // Base route untuk cek server nyala
-    app.get('/', (req, res) => {
-        res.send('Server Backend Siap! 🚀');
-    });
+// --- FIX EROFS PADA APP.JS ---
+// Hanya serve folder uploads JIKA foldernya benar-benar ada (Localhost)
+// Di Vercel ini akan diskip otomatis, jadi aman.
+const uploadsDir = path.join(__dirname, 'uploads');
+if (fs.existsSync(uploadsDir)) {
+    app.use('/uploads', express.static(uploadsDir));
+}
 
-    module.exports = app;
+app.use('/api/auth', authRoutes);
+app.use('/api/classes', classRoutes);
+app.use('/api/dashboard', dashboardRoutes);
+app.use('/api/student', studentRoutes);
+app.use('/api/notifications', notificationRoutes);
+
+app.get('/', (req, res) => {
+    res.send('Server Backend Siap! 🚀');
+});
+
+module.exports = app;

@@ -4,44 +4,33 @@ const studentController = require('../controllers/studentController');
 const authMiddleware = require('../middleware/authMiddleware');
 const multer = require('multer');
 const path = require('path');
-const os = require('os'); 
+const os = require('os');
 
-// 1. Tentukan folder simpan
-const isProduction = process.env.NODE_ENV === 'production' || process.env.VERCEL;
-// Di Vercel wajib /tmp. Di lokal boleh uploads/
-const tempDir = isProduction ? os.tmpdir() : 'uploads/'; 
+// --- PENTING: GUNAKAN FOLDER TMP SYSTEM ---
+const tempDir = os.tmpdir(); 
 
-// --- CONFIG MULTER FOR PROFILE PHOTOS ---
+// A. Config Profile Photo
 const storageProfile = multer.diskStorage({
-    destination: function (req, file, cb) {
-        cb(null, tempDir); // Gunakan tempDir yang sudah didefinisikan
+    destination: (req, file, cb) => {
+        cb(null, tempDir); // Simpan di /tmp
     },
-    filename: function (req, file, cb) {
+    filename: (req, file, cb) => {
         const ext = path.extname(file.originalname);
         cb(null, `profile-${req.user.id}-${Date.now()}${ext}`);
     }
 });
 
-const fileFilter = (req, file, cb) => {
-    if (file.mimetype.startsWith('image/')) {
-        cb(null, true);
-    } else {
-        cb(new Error('Not an image!'), false);
-    }
-};
-
 const uploadProfile = multer({ 
     storage: storageProfile,
-    limits: { fileSize: 2 * 1024 * 1024 }, 
-    fileFilter: fileFilter
+    limits: { fileSize: 2 * 1024 * 1024 }
 });
 
-// --- CONFIG MULTER FOR TASKS ---
+// B. Config Task Upload
 const storageTask = multer.diskStorage({
-    destination: function (req, file, cb) {
-        cb(null, tempDir); // Gunakan tempDir yang sama
+    destination: (req, file, cb) => {
+        cb(null, tempDir); // Simpan di /tmp
     },
-    filename: function (req, file, cb) {
+    filename: (req, file, cb) => {
         const cleanName = file.originalname.replace(/[^a-zA-Z0-9.]/g, '_');
         cb(null, `tugas-${req.user.id}-${Date.now()}-${cleanName}`);
     }
@@ -49,12 +38,13 @@ const storageTask = multer.diskStorage({
 
 const uploadTask = multer({ storage: storageTask }); 
 
-// --- MIDDLEWARE ---
+// --- ROUTES ---
 router.use(authMiddleware.protect);
-// Izinkan Guru akses detail tugas (preview)
+
+// Endpoint Preview Task (Boleh Guru & Siswa)
 router.get('/tasks/:idTugas', authMiddleware.restrictTo('siswa', 'guru'), studentController.getTaskDetail);
 
-// --- ZONE KHUSUS SISWA ---
+// Endpoint Khusus Siswa
 router.use(authMiddleware.restrictTo('siswa'));
 
 router.get('/dashboard', studentController.getDashboard);
