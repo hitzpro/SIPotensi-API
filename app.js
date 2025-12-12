@@ -8,6 +8,7 @@
     const dashboardRoutes = require('./routes/dashboardRoutes');
     const studentRoutes = require('./routes/studentRoutes');
     const notificationRoutes = require('./routes/notificationRoutes');
+    const fs = require('fs');
 
     const app = express();
 
@@ -18,7 +19,9 @@
     app.use(express.urlencoded({ extended: true })); // Untuk handle form-data
 
     // Routes
-    app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
+    if (fs.existsSync(path.join(__dirname, 'uploads'))) {
+        app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
+    }
     app.use('/api/auth', authRoutes);
     app.use('/api/classes', classRoutes);
     app.use('/api/dashboard', dashboardRoutes);
