@@ -5,24 +5,29 @@ const authMiddleware = require('../middleware/authMiddleware');
 const gradeController = require('../controllers/gradeController');
 const predictController = require('../controllers/predictController');
 
-
-
-// Tambahan untuk upload file
+// --- PERBAIKAN MULTER AGAR JALAN DI VERCEL ---
 const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
+const os = require('os'); // 1. Wajib import OS
+
+// 2. Tentukan folder sementara
+// Jika di Vercel/Production gunakan /tmp, jika lokal gunakan uploads/
+const isProduction = process.env.NODE_ENV === 'production' || process.env.VERCEL;
+const tempDir = isProduction ? os.tmpdir() : 'uploads/soal_tugas';
+
+// 3. Pastikan folder lokal ada (hanya untuk development)
+if (!isProduction && !fs.existsSync(tempDir)){
+    fs.mkdirSync(tempDir, { recursive: true });
+}
 
 const storage = multer.diskStorage({
     destination: function (req, file, cb) {
-        const dir = 'uploads/soal_tugas';
-        // Buat folder jika belum ada
-        if (!fs.existsSync(dir)){
-            fs.mkdirSync(dir, { recursive: true });
-        }
-        cb(null, dir);
+        // Simpan ke folder yang aman (/tmp di Vercel)
+        cb(null, tempDir);
     },
     filename: function (req, file, cb) {
-        // Bersihkan nama file dari karakter aneh
+        // Bersihkan nama file
         const cleanName = file.originalname.replace(/[^a-zA-Z0-9.]/g, '_');
         // Format: [TIMESTAMP]-[NAMA_FILE_ASLI]
         cb(null, `${Date.now()}-${cleanName}`);
@@ -30,6 +35,7 @@ const storage = multer.diskStorage({
 });
 
 const upload = multer({ storage: storage });
+// --------------------------------------------------
 
 router.use(authMiddleware.protect);
 router.use(authMiddleware.restrictTo('guru'));
