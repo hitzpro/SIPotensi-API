@@ -1,0 +1,10 @@
+# Dependency
+node_modules/
+
+# Environment Variables (PENTING: Jangan di-upload karena ada Private Key VAPID & DB URL)
+.env
+
+# Uploads Folder (Opsional: Agar file sampah/testing tidak ikut terupload)
+uploads/
+*.log
+.DS_Store
