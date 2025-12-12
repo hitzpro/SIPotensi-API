@@ -194,7 +194,7 @@ const ClassModel = {
                 if (sub && sub.file_url) {
                     const normalizedPath = sub.file_url.replace(/\\/g, '/');
                     // Ganti port 3000 jika backend Anda jalan di port lain
-                    cleanFileUrl = `http://localhost:3000/${normalizedPath}`;
+                    cleanFileUrl = `https://sipotensi-api.vercel.app/${normalizedPath}`;
                 }
 
                 return {
