@@ -9,6 +9,8 @@ const classRoutes = require('./routes/classRoutes');
 const dashboardRoutes = require('./routes/dashboardRoutes');
 const studentRoutes = require('./routes/studentRoutes');
 const notificationRoutes = require('./routes/notificationRoutes');
+const adminGuruRoutes = require('./routes/adminGuruRoutes');
+const fileRoutes = require('./routes/fileRoutes');
 
 const app = express();
 
@@ -30,6 +32,8 @@ app.use('/api/classes', classRoutes);
 app.use('/api/dashboard', dashboardRoutes);
 app.use('/api/student', studentRoutes);
 app.use('/api/notifications', notificationRoutes);
+app.use('/api/admin/guru', adminGuruRoutes);
+app.use('/api/files', fileRoutes);
 
 app.get('/', (req, res) => {
     res.send('Server Backend Siap! 🚀');

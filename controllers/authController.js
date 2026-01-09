@@ -5,7 +5,7 @@ const jwt = require('jsonwebtoken');
 
 exports.login = async (req, res) => {
     try {
-        // Terima input: email (untuk guru), nisn (untuk siswa), dan password
+        // Terima input: email (untuk guru/admin), nisn (untuk siswa), dan password
         const { email, nisn, password } = req.body;
 
         // 1. Validasi Input Dasar
@@ -18,9 +18,10 @@ exports.login = async (req, res) => {
 
         let user = null;
 
-        // 2. Logika Percabangan (Guru vs Siswa)
+        // 2. Logika Percabangan
         if (email) {
-            // --- JALUR GURU ---
+            // --- JALUR GURU & ADMIN ---
+            // Admin dan Guru sama-sama login pakai email
             user = await UserModel.findByEmail(email);
         } else if (nisn) {
             // --- JALUR SISWA ---
@@ -33,21 +34,19 @@ exports.login = async (req, res) => {
         }
 
         // 4. Verifikasi Password
-        // (Ingat: Siswa passwordnya adalah hash dari NISN, Guru hash dari password buatannya)
-        // Karena dua-duanya di-hash pakai bcrypt, kita pakai cara cek yang sama.
         const isMatch = await bcrypt.compare(password, user.password_hash);
         
         if (!isMatch) {
             return res.status(401).json({ message: "Password salah!" });
         }
 
-        // 5. Generate Token JWT (Payloadnya sama untuk Guru & Siswa)
+        // 5. Generate Token JWT
         const token = jwt.sign(
             { 
                 id: user.id, 
                 role: user.role, 
                 nama: user.nama,
-                nisn: user.nisn 
+                nisn: user.nisn // nisn null kalau admin/guru, tidak masalah
             },
             process.env.JWT_SECRET,
             { expiresIn: '1d' }
@@ -61,9 +60,9 @@ exports.login = async (req, res) => {
             user: {
                 id: user.id,
                 nama: user.nama,
-                email: user.email, // Akan null kalau siswa
-                nisn: user.nisn,   // Akan null kalau guru
-                role: user.role
+                email: user.email, 
+                nisn: user.nisn,   
+                role: user.role // Ini penting buat frontend (admin/guru/siswa)
             }
         });
 

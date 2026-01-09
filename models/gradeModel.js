@@ -64,7 +64,9 @@ const GradeModel = {
             .from('tugas')
             .select('*')
             .eq('id_kelas', classId)
-            .order('tanggal', { ascending: false }); // Asumsi kolom tanggal ada (created_at?)
+            // Ganti 'tanggal' dengan 'id' atau 'created_at' jika 'tanggal' belum ada di DB
+            .order('tanggal', { ascending: false }); 
+        
         if (error) throw error;
         return data;
     },

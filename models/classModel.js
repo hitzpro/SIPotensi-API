@@ -162,8 +162,7 @@ const ClassModel = {
     // Ambil History Nilai Lengkap Siswa di Kelas Tertentu
     getStudentHistory: async (classId, studentId) => {
         try {
-            // 1. Ambil Master Tugas (Semua tugas di kelas ini)
-            // Urutkan berdasarkan ID desc (terbaru) agar aman jika created_at hilang
+            // 1. Ambil Master Tugas
             const { data: allTasks, error: errTask } = await supabase
                 .from('tugas')
                 .select('*') 
@@ -181,32 +180,33 @@ const ClassModel = {
             if (errSub) throw new Error("Gagal ambil submisi: " + errSub.message);
 
             // 3. Mapping (Gabungkan)
-            // Default array kosong jika null
             const safeTasks = allTasks || [];
             const safeSubmissions = submissions || [];
 
             const tugasMerged = safeTasks.map(t => {
-                // Cari submission untuk tugas ini
                 const sub = safeSubmissions.find(s => s.id_tugas === t.id);
                 
-                // Fix URL File (Windows Backslash -> Slash)
+                // --- PERBAIKAN DI SINI ---
                 let cleanFileUrl = null;
                 if (sub && sub.file_url) {
                     const normalizedPath = sub.file_url.replace(/\\/g, '/');
                     // Ganti port 3000 jika backend Anda jalan di port lain
                     cleanFileUrl = `https://sipotensi-api.vercel.app/${normalizedPath}`;
+
+                    // Cukup normalize slash saja. JANGAN tambah http://localhost...
+                    // Kita butuh path fisik asli (C:/Users/...) untuk dikirim ke stream endpoint
+                    cleanFileUrl = sub.file_url.replace(/\\/g, '/'); 
                 }
 
                 return {
-                    // Nilai null jika belum submit
                     nilai: sub ? sub.nilai : null,
                     tugas: t,
-                    // Kirim object submission lengkap atau null
+                    // Kirim path asli
                     submission: sub ? { ...sub, file_url: cleanFileUrl } : null
                 };
             });
 
-            // 4. Ambil Nilai Ujian (Gunakan maybeSingle agar tidak error 500 jika kosong)
+            // 4. Ambil Nilai Ujian
             const { data: ujian } = await supabase
                 .from('nilai_ujian')
                 .select('nilai_uts, nilai_uas')

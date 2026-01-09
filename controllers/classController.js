@@ -4,6 +4,7 @@ const fs = require('fs');
 const csv = require('csv-parser');
 const bcrypt = require('bcryptjs');
 const UserModel = require('../models/userModel');
+const DashboardModel = require('../models/dashboardModel'); // Reuse DashboardModel aja biar gak duplikat kodingan
 
 exports.createClass = async (req, res) => {
     try {
@@ -198,6 +199,39 @@ exports.bulkRemoveStudents = async (req, res) => {
             message: `${studentIds.length} siswa berhasil dihapus.` 
         });
     } catch (error) {
+        res.status(500).json({ message: error.message });
+    }
+};
+
+exports.getMyClasses = async (req, res) => {
+    try {
+        const id_guru = req.user.id;
+        
+        // 1. Ambil daftar kelas dari tabel guru_mapel_kelas (Logic Read Only Guru)
+        const classes = await DashboardModel.getClassesByGuru(id_guru);
+
+        // 2. Loop setiap kelas untuk hitung Statistik (Siswa & Tugas)
+        const classesWithStats = await Promise.all(classes.map(async (cls) => {
+             // Hitung Siswa
+             const siswa = await DashboardModel.countTotalStudents([cls.id]);
+             
+             // [PERBAIKAN DISINI] Hitung Tugas dari DB, bukan hardcode 0
+             const tugas = await DashboardModel.countTasksInClass(cls.id); 
+
+             return { 
+                 ...cls, 
+                 jumlah_siswa: siswa, 
+                 jumlah_tugas: tugas // Sekarang nilainya dinamis dari DB
+             }; 
+        }));
+
+        res.status(200).json({
+            status: 'success',
+            results: classesWithStats.length,
+            data: classesWithStats
+        });
+    } catch (error) {
+        console.error("Get My Classes Error:", error);
         res.status(500).json({ message: error.message });
     }
 };

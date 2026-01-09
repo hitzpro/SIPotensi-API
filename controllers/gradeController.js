@@ -114,11 +114,34 @@ exports.createTugas = async (req, res) => {
 // 2. Guru Melihat Daftar Tugas
 exports.getListTugas = async (req, res) => {
     try {
-        const { classId } = req.params;
+        // 1. Ambil parameter dari URL
+        // Pastikan di routes penulisannya router.get('/:classId/tugas', ...)
+        const { classId } = req.params; 
+
+        if (!classId) {
+            return res.status(400).json({ message: "ID Kelas tidak ditemukan di URL" });
+        }
+
+        console.log(`[DEBUG] Mengambil tugas untuk kelas: ${classId}`);
+
+        // 2. Panggil Model
         const data = await GradeModel.getTugasByKelas(classId);
-        res.status(200).json({ status: 'success', data });
+
+        // 3. Kirim Response (Handle Array Kosong / Null)
+        res.status(200).json({
+            status: 'success',
+            results: data ? data.length : 0,
+            data: data || [] // Jika null, kirim array kosong []
+        });
+
     } catch (error) {
-        res.status(500).json({ message: error.message });
+        // INI PENTING: Cek Terminal VS Code kamu untuk melihat pesan error aslinya
+        console.error("[ERROR GET TUGAS]:", error.message);
+        
+        res.status(500).json({ 
+            message: "Gagal memuat daftar tugas", 
+            error: error.message 
+        });
     }
 };
 

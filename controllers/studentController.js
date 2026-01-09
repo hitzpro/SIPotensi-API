@@ -57,9 +57,19 @@ exports.getMyTasks = async (req, res) => {
     try {
         const studentId = req.user.id;
         
+        // Cek kelas dulu
         const classInfo = await StudentModel.getMyClassInfo(studentId);
-        if (!classInfo) return res.status(400).json({ message: "Belum masuk kelas" });
+        
+        // Jika null (belum masuk kelas), return sukses tapi data kosong + pesan khusus
+        if (!classInfo) {
+            return res.status(200).json({ 
+                status: 'success',
+                message: "Belum masuk kelas",
+                data: [] 
+            });
+        }
 
+        // Ambil Tugas
         const tasks = await StudentModel.getMyTasks(classInfo.id_kelas, studentId);
 
         res.status(200).json({
@@ -69,7 +79,8 @@ exports.getMyTasks = async (req, res) => {
         });
 
     } catch (error) {
-        res.status(500).json({ message: error.message });
+        console.error("[CONTROLLER ERROR] getMyTasks:", error.message);
+        res.status(500).json({ message: "Gagal memuat tugas: " + error.message });
     }
 };
 

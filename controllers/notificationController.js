@@ -6,13 +6,17 @@ exports.getMyNotifications = async (req, res) => {
         const studentId = req.user.id;
         const notifs = await NotificationModel.getByStudent(studentId);
         
-        // Hitung berapa yang belum dibaca (unread)
-        const unreadCount = notifs.filter(n => !n.is_read).length;
+        // Handle null/undefined dari model
+        const safeNotifs = notifs || [];
+        const unreadCount = safeNotifs.filter(n => !n.is_read).length;
 
         res.status(200).json({
             status: 'success',
-            unread_count: unreadCount,
-            data: notifs
+            // Format Data yang seragam
+            data: {
+                notifications: safeNotifs, // Array notifikasi
+                unread: unreadCount        // Jumlah unread
+            }
         });
     } catch (error) {
         res.status(500).json({ message: error.message });
