@@ -264,3 +264,47 @@ exports.broadcastDocument = async (req, res) => {
         res.status(500).json({ message: "Gagal mengirim dokumen" });
     }
 };
+
+exports.getPredictionsByClass = async (req, res) => {
+    try {
+        const { id_kelas } = req.params;
+        
+        // Panggil Model (Pastikan AdminGuruModel sudah di-update juga)
+        const rawData = await AdminGuruModel.getStudentsWithPredictions(id_kelas);
+
+        // Format Data untuk Frontend
+        const formattedData = rawData.map(item => {
+            // Cek apakah ada data prediksi (array tidak kosong)
+            const pred = (item.prediction_results && item.prediction_results.length > 0) 
+                ? item.prediction_results[0] 
+                : null;
+            
+            // Ambil nilai ujian (safe check)
+            const ujian = (item.nilai_ujian && item.nilai_ujian.length > 0)
+                ? item.nilai_ujian[0]
+                : { nilai_uts: 0, nilai_uas: 0 };
+            
+            // Hitung Simple Nilai Akhir: (UTS + UAS) / 2
+            const nilaiAkhir = ((ujian.nilai_uts + ujian.nilai_uas) / 2).toFixed(1);
+
+            return {
+                id_siswa: item.id_siswa,
+                nama: item.users?.nama,
+                nisn: item.users?.nisn,
+                is_predicted: !!pred, // True jika pred tidak null
+                status_ui: pred ? pred.status_ui : 'Belum Diprediksi',
+                recommendation: pred ? pred.recommendation : '-',
+                nilai_akhir: pred ? nilaiAkhir : 0
+            };
+        });
+
+        res.status(200).json({
+            status: 'success',
+            data: formattedData
+        });
+
+    } catch (error) {
+        console.error("Error getPredictionsByClass:", error.message);
+        res.status(500).json({ message: "Gagal mengambil data prediksi siswa" });
+    }
+};

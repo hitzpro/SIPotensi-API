@@ -1,171 +1,178 @@
 const axios = require('axios');
 const PredictModel = require('../models/predictModel');
 
-// URL API Python
+// Pastikan URL ini sesuai dengan port Flask/Python kamu
 const ML_API_URL = process.env.ML_API_URL || 'http://127.0.0.1:5000/predict';
 
-// === HELPER LOGIC: Hitung Status Akademik ===
-// Fungsi ini tetap di sini karena mengandung "Business Logic" (menghitung rata-rata & validasi aturan)
+/* ================================
+   HELPER: HITUNG RATA-RATA TUGAS
+================================ */
 const calculateAcademicStatus = async (id_kelas, id_siswa) => {
-    // 1. Ambil List Tugas dari Model
     const listTugas = await PredictModel.getTasksByClass(id_kelas);
-    
-    // Jika guru belum bikin tugas sama sekali
     if (listTugas.length === 0) {
         return { valid: false, msg: "Guru belum membuat tugas" };
     }
 
     const idsTugas = listTugas.map(t => t.id);
-
-    // 2. Ambil Nilai Tugas Siswa dari Model
     const nilaiTugas = await PredictModel.getTaskGrades(id_siswa, idsTugas);
-    const jumlahDinilai = nilaiTugas.length;
-    
-    // Syarat: Minimal 3 tugas sudah dinilai.
-    const MIN_TUGAS = 3;
 
-    if (jumlahDinilai < MIN_TUGAS) {
-        return { 
-            valid: false, 
-            msg: `Baru ${jumlahDinilai} tugas dinilai (Min. ${MIN_TUGAS})` 
-        };
+    const MIN_TUGAS = 3; // Minimal tugas yang harus dinilai
+    if (nilaiTugas.length < MIN_TUGAS) {
+        return { valid: false, msg: `Tugas dinilai baru ${nilaiTugas.length} dari ${MIN_TUGAS}` };
     }
 
-    // Hitung Rata-rata
-    let total = 0;
-    nilaiTugas.forEach(n => total += n.nilai);
-    const rataTugas = total / jumlahDinilai;
+    const total = nilaiTugas.reduce((sum, n) => sum + n.nilai, 0);
+    const rataTugas = total / nilaiTugas.length;
 
-    return { valid: true, rata_tugas: rataTugas };
+    return { valid: true, rata_tugas: Number(rataTugas.toFixed(2)) };
 };
 
-// 1. CEK KELENGKAPAN DATA (READINESS)
+/* ================================
+   1. CEK KESIAPAN DATA (Untuk UI Table Awal)
+================================ */
 exports.checkClassReadiness = async (req, res) => {
     try {
         const { id_kelas } = req.params;
-
-        // Ambil siswa via Model
         const students = await PredictModel.getStudentsByClass(id_kelas);
 
-        const fullReport = [];
+        const report = [];
 
-        // Loop siswa (bisa dioptimasi pakai Promise.all jika data banyak, tapi loop basic lebih aman untuk logic berurutan)
         for (const s of students) {
             const issues = [];
 
-            // A. Cek Nilai Ujian via Model
+            // Cek Nilai Ujian
             const ujian = await PredictModel.getExamGrade(s.id_siswa, id_kelas);
+            if (!ujian?.nilai_uts) issues.push("Nilai UTS kosong");
+            if (!ujian?.nilai_uas) issues.push("Nilai UAS kosong");
 
-            if (!ujian || ujian.nilai_uts === null) issues.push("Nilai UTS Kosong");
-            if (!ujian || ujian.nilai_uas === null) issues.push("Nilai UAS Kosong");
+            // Cek Nilai Tugas
+            const tugasStatus = await calculateAcademicStatus(id_kelas, s.id_siswa);
+            if (!tugasStatus.valid) issues.push(tugasStatus.msg);
 
-            // B. Cek Tugas (Panggil Helper Local)
-            const statusTugas = await calculateAcademicStatus(id_kelas, s.id_siswa);
-            if (!statusTugas.valid) {
-                issues.push(statusTugas.msg);
-            }
-
-            fullReport.push({
+            report.push({
                 id_siswa: s.id_siswa,
-                nama: s.users ? s.users.nama : "Tanpa Nama",
-                nisn: s.users ? s.users.nisn : "-",
+                nama: s.users?.nama ?? "-",
+                nisn: s.users?.nisn ?? "-",
                 is_ready: issues.length === 0, // True jika tidak ada masalah
-                message: issues.length > 0 ? issues.join(', ') : 'Data Lengkap'
+                message: issues.length ? issues.join(", ") : "Siap diprediksi"
             });
         }
 
-        res.status(200).json({
-            status: 'success',
-            data: fullReport
-        });
+        res.json({ status: "success", data: report });
 
-    } catch (error) {
-        res.status(500).json({ message: error.message });
+    } catch (err) {
+        res.status(500).json({ message: err.message });
     }
 };
 
-// 2. PREDIKSI MASSAL (BULK)
+/* ================================
+   2. PREDIKSI MASSAL (KMEANS)
+================================ */
 exports.predictClassBulk = async (req, res) => {
     try {
         const { id_kelas } = req.body;
-        
-        // --- STEP 1: TEST KONEKSI AI ---
+
+        // 🔹 1. Tes koneksi ke Server Python/AI
         try {
-            await axios.post(ML_API_URL, { rata_tugas: 0, nilai_uts: 0, nilai_uas: 0 }, { timeout: 3000 });
-        } catch (e) {
-            if (e.code === 'ECONNREFUSED' || e.code === 'ERR_NETWORK') {
-                return res.status(503).json({ status: 'error', message: "Server AI (Python) mati." });
-            }
+            await axios.post(ML_API_URL, {
+                rata_tugas: 75, nilai_uts: 75, nilai_uas: 75
+            }, { timeout: 3000 });
+        } catch (error) {
+            console.error("AI Server Error:", error.message);
+            return res.status(503).json({
+                status: "error",
+                message: "Server AI (Python) tidak aktif atau error."
+            });
         }
 
-        // --- STEP 2: MULAI PROSES ---
         const students = await PredictModel.getStudentsByClass(id_kelas);
-
-        const responseData = []; 
-        const dbUpdates = [];    
+        
+        const results = [];
+        const skipped = [];
+        const dbPayload = [];
 
         for (const s of students) {
-            // Ambil Data Akademik via Model & Helper
-            const [ujian, statusTugas] = await Promise.all([
+            // 🔹 2. Ambil Data Real
+            const [ujian, tugas] = await Promise.all([
                 PredictModel.getExamGrade(s.id_siswa, id_kelas),
                 calculateAcademicStatus(id_kelas, s.id_siswa)
             ]);
 
-            // Validasi: Skip jika data tidak lengkap
-            if (!ujian || ujian.nilai_uts === null || ujian.nilai_uas === null || !statusTugas.valid) {
-                continue; 
+            // Validasi kelengkapan (Skip jika belum lengkap)
+            if (!ujian || !tugas.valid) {
+                skipped.push({
+                    id_siswa: s.id_siswa,
+                    nama: s.users?.nama,
+                    reason: "Data akademik belum lengkap saat proses berjalan"
+                });
+                continue;
+            }
+
+            const payload = {
+                rata_tugas: tugas.rata_tugas,
+                nilai_uts: ujian.nilai_uts,
+                nilai_uas: ujian.nilai_uas
+            };
+
+            // Validasi range angka (0-100)
+            const invalid = Object.values(payload).some(v => typeof v !== 'number' || v < 0 || v > 100);
+            if (invalid) {
+                skipped.push({ id_siswa: s.id_siswa, nama: s.users?.nama, reason: "Nilai diluar range 0-100" });
+                continue;
             }
 
             try {
-                // Tembak Python
-                const payload = { 
-                    rata_tugas: statusTugas.rata_tugas, 
-                    nilai_uts: ujian.nilai_uts, 
-                    nilai_uas: ujian.nilai_uas 
-                };
+                // 🔹 3. Kirim ke Python
+                const { data } = await axios.post(ML_API_URL, payload);
                 
-                const responseAI = await axios.post(ML_API_URL, payload);
-                const hasil = responseAI.data.prediction;
+                // === PERBAIKAN DI SINI (Mapping Output Python) ===
+                // Python return: { prediction: { cluster_id, label, status_ui, recommendation, ... } }
+                const pred = data.prediction;
 
-                // 1. Siapkan data DB
-                dbUpdates.push({
+                // Siapkan data untuk Database
+                dbPayload.push({
                     id_siswa: s.id_siswa,
                     id_kelas: id_kelas,
-                    cluster: hasil.cluster_id,
-                    rekomendasi: hasil.potensi, 
+                    cluster_id: pred.cluster_id,       // INT
+                    risk_label: pred.label,            // TEXT "Potensi Tinggi"
+                    status_ui: pred.status_ui,         // TEXT "Aman"
+                    recommendation: pred.recommendation, // TEXT Panjang
                     tanggal_proses: new Date()
                 });
 
-                // 2. Siapkan data Frontend
-                responseData.push({
+                // Siapkan data untuk return ke Frontend (HARUS format nested prediction)
+                results.push({
                     student_name: s.users?.nama,
                     nisn: s.users?.nisn,
-                    risk_label: hasil.potensi, 
-                    scores: {
-                        tugas: statusTugas.rata_tugas,
-                        uts: ujian.nilai_uts,
-                        uas: ujian.nilai_uas
-                    }
+                    prediction: pred, // <-- Kirim FULL object prediction ke FE agar JS tidak error
+                    scores: payload
                 });
 
-            } catch (errAI) {
-                console.error(`Gagal memprediksi siswa ${s.id_siswa}:`, errAI.message);
+            } catch (err) {
+                console.error(`Gagal memprediksi siswa ${s.id_siswa}:`, err.message);
+                skipped.push({
+                    id_siswa: s.id_siswa,
+                    nama: s.users?.nama,
+                    reason: "Gagal proses perhitungan AI"
+                });
             }
         }
 
-        // --- STEP 3: UPDATE DATABASE VIA MODEL ---
-        if (dbUpdates.length > 0) {
-            await PredictModel.savePredictions(dbUpdates);
+        // 🔹 4. Simpan ke Database (Bulk Upsert)
+        if (dbPayload.length > 0) {
+            await PredictModel.savePredictions(dbPayload);
         }
 
-        // --- STEP 4: RETURN DATA ---
-        res.status(200).json({
-            status: 'success',
-            message: 'Analisis selesai',
-            data: responseData 
+        res.json({
+            status: "success",
+            processed: results.length,
+            skipped_count: skipped.length,
+            data: results, // Ini array yang akan diloop oleh Frontend
+            skipped_data: skipped
         });
 
-    } catch (error) {
-        res.status(500).json({ message: error.message });
+    } catch (err) {
+        console.error("Bulk Predict Error:", err);
+        res.status(500).json({ message: err.message });
     }
 };

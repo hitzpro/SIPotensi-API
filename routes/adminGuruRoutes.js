@@ -44,4 +44,10 @@ router.get('/classes', protectAdmin, adminClassController.getAllClasses); // Unt
 router.post('/classes', protectAdmin, adminClassController.createClass);  // Untuk Create Kelas
 router.delete('/classes/:id', protectAdmin, adminClassController.deleteClass); // Untuk Hapus
 
+router.get('/predictions/:id_kelas', 
+    authMiddleware.protect, 
+    authMiddleware.restrictTo('admin'), 
+    adminGuruController.getPredictionsByClass
+);
+
 module.exports = router;

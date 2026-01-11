@@ -108,7 +108,59 @@ const AdminGuruModel = {
         
         if (error) throw error;
         return data;
-    }
+    },
+
+    // 8. Ambil Siswa + Status Prediksi + Nilai (Untuk Admin Table)
+    getStudentsWithPredictions: async (classId) => {
+        // QUERY 1: Ambil Daftar Siswa di Kelas tersebut
+        const { data: students, error: errStudent } = await supabase
+          .from('class_students')
+          .select(`
+            id_siswa,
+            users:id_siswa (nama, nisn)
+          `)
+          .eq('id_kelas', classId);
+    
+        if (errStudent) throw errStudent;
+    
+        // QUERY 2: Ambil Data Prediksi di Kelas tersebut
+        const { data: predictions, error: errPred } = await supabase
+          .from('prediction_results')
+          .select('*')
+          .eq('id_kelas', classId);
+    
+        if (errPred) throw errPred;
+    
+        // QUERY 3: Ambil Data Nilai Ujian di Kelas tersebut
+        const { data: grades, error: errGrade } = await supabase
+          .from('nilai_ujian')
+          .select('*')
+          .eq('id_kelas', classId);
+          
+        if (errGrade) throw errGrade;
+    
+        // --- LOGIC PENGGABUNGAN DATA (MERGE) ---
+        // Kita gabungkan data berdasarkan 'id_siswa'
+        
+        const mergedData = students.map(s => {
+          // Cari prediksi milik siswa ini
+          const pred = predictions.find(p => p.id_siswa === s.id_siswa);
+          
+          // Cari nilai milik siswa ini
+          const grade = grades.find(g => g.id_siswa === s.id_siswa);
+    
+          return {
+            id_siswa: s.id_siswa,
+            users: s.users, // Object {nama, nisn}
+            
+            // Format agar sesuai dengan Controller yang sudah kita buat
+            prediction_results: pred ? [pred] : [], 
+            nilai_ujian: grade ? [grade] : []
+          };
+        });
+    
+        return mergedData;
+      }
     
 };
 

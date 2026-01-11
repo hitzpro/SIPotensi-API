@@ -28,6 +28,7 @@ const storage = multer.diskStorage({
 const upload = multer({ storage: storage });
 // ------------------------------------------
 
+router.get('/all', authMiddleware.protect, authMiddleware.restrictTo('admin'), classController.getAllClasses);
 router.use(authMiddleware.protect);
 router.use(authMiddleware.restrictTo('guru'));
 
@@ -44,6 +45,7 @@ router.post('/tugas', upload.single('file_soal'), gradeController.createTugas);
 router.put('/tugas/:id', upload.single('file_soal'), gradeController.editTugas);
 
 // Standard Routes (Tanpa Upload)
+
 router.get('/', authMiddleware.restrictTo('guru'), classController.getMyClasses);
 router.post('/', classController.createClass);
 router.delete('/:id', classController.deleteClass);
@@ -64,5 +66,6 @@ router.post('/nilai-ujian', gradeController.inputNilaiUjian);
 
 router.post('/predict-bulk', predictController.predictClassBulk); 
 router.get('/:id_kelas/check-readiness', predictController.checkClassReadiness); 
+
 
 module.exports = router;

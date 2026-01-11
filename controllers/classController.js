@@ -235,3 +235,27 @@ exports.getMyClasses = async (req, res) => {
         res.status(500).json({ message: error.message });
     }
 };
+
+// [TAMBAHAN BARU] Ambil Semua Kelas (Untuk Admin)
+exports.getAllClasses = async (req, res) => {
+    try {
+        // Panggil Model untuk ambil semua data kelas dari tabel 'classes'
+        // Kita gunakan Model Dashboard atau Model Class, asumsi pakai supabase langsung disini biar cepat
+        const supabase = require('../config/supabase'); 
+        
+        const { data, error } = await supabase
+            .from('classes')
+            .select('*')
+            .order('nama_kelas', { ascending: true });
+
+        if (error) throw error;
+
+        res.status(200).json({
+            status: 'success',
+            results: data.length,
+            data: data
+        });
+    } catch (error) {
+        res.status(500).json({ message: error.message });
+    }
+};
