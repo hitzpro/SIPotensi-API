@@ -43,6 +43,11 @@ router.post('/broadcast-doc', protectAdmin, upload.single('file'), adminGuruCont
 router.get('/classes', protectAdmin, adminClassController.getAllClasses); // Untuk Dropdown & List
 router.post('/classes', protectAdmin, adminClassController.createClass);  // Untuk Create Kelas
 router.delete('/classes/:id', protectAdmin, adminClassController.deleteClass); // Untuk Hapus
+router.put('/classes/:id', protectAdmin, adminClassController.updateClass); // Tambahkan ini
+
+// Route History
+router.get('/history-doc', protectAdmin, adminGuruController.getDocHistory);
+router.post('/history-recipients', protectAdmin, adminGuruController.getDocRecipients);
 
 router.get('/predictions/:id_kelas', 
     authMiddleware.protect, 

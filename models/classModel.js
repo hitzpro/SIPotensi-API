@@ -243,6 +243,40 @@ const ClassModel = {
             .in('id_siswa', studentIds); // Hapus dimana ID ada di dalam array
 
         if (error) throw error;
+    },
+
+    // 1. Ambil SEMUA Kelas (Untuk Dropdown Admin)
+    getAllClasses: async () => {
+        const { data, error } = await supabase
+            .from('classes')
+            .select('*')
+            .order('nama_kelas', { ascending: true });
+
+        if (error) throw error;
+        return data;
+    },
+
+    // 2. Update Kelas (Berdasarkan ID Kelas saja)
+    updateClass: async (id, dataUpdate) => {
+        const { data, error } = await supabase
+            .from('classes')
+            .update(dataUpdate)
+            .eq('id', id)
+            .select()
+            .single();
+
+        if (error) throw error;
+        return data;
+    },
+
+    // 3. Delete Kelas Admin (Tanpa cek id_guru, karena admin berkuasa)
+    deleteClassAdmin: async (id) => {
+        const { error } = await supabase
+            .from('classes')
+            .delete()
+            .eq('id', id);
+        
+        if (error) throw error;
     }
 };
 

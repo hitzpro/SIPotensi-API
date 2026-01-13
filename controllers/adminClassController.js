@@ -1,5 +1,5 @@
 // controllers/adminClassController.js
-const supabase = require('../config/supabase');
+const ClassModel = require('../models/classModel');
 
 exports.createClass = async (req, res) => {
     try {
@@ -9,13 +9,10 @@ exports.createClass = async (req, res) => {
             return res.status(400).json({ message: "Nama Kelas & Tahun Ajaran wajib diisi" });
         }
 
-        const { data, error } = await supabase
-            .from('classes')
-            .insert([{ nama_kelas, tahun_ajaran }])
-            .select()
-            .single();
-
-        if (error) throw error;
+        // Pakai createClass yang sudah ada di model kamu
+        // Note: createClass di model kamu mungkin butuh revisi sedikit jika aslinya butuh id_guru.
+        // Asumsi: Kita kirim object sesuai kebutuhan insert database
+        const data = await ClassModel.createClass({ nama_kelas, tahun_ajaran });
 
         res.status(201).json({
             status: 'success',
@@ -29,18 +26,8 @@ exports.createClass = async (req, res) => {
 
 exports.getAllClasses = async (req, res) => {
     try {
-        // Admin butuh melihat SEMUA kelas untuk dropdown
-        const { data, error } = await supabase
-            .from('classes')
-            .select('*')
-            .order('nama_kelas', { ascending: true });
-
-        if (error) throw error;
-
-        res.status(200).json({
-            status: 'success',
-            data: data
-        });
+        const data = await ClassModel.getAllClasses(); // Fungsi baru yg kita tambah
+        res.status(200).json({ status: 'success', data: data });
     } catch (error) {
         res.status(500).json({ message: error.message });
     }
@@ -49,9 +36,20 @@ exports.getAllClasses = async (req, res) => {
 exports.deleteClass = async (req, res) => {
     try {
         const { id } = req.params;
-        const { error } = await supabase.from('classes').delete().eq('id', id);
-        if (error) throw error;
+        await ClassModel.deleteClassAdmin(id); // Fungsi baru yg kita tambah
         res.status(200).json({ status: 'success', message: 'Kelas dihapus' });
+    } catch (error) {
+        res.status(500).json({ message: error.message });
+    }
+};
+
+exports.updateClass = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { nama_kelas, tahun_ajaran } = req.body;
+        
+        const data = await ClassModel.updateClass(id, { nama_kelas, tahun_ajaran });
+        res.status(200).json({ status: 'success', message: 'Kelas diupdate', data });
     } catch (error) {
         res.status(500).json({ message: error.message });
     }

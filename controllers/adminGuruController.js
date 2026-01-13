@@ -170,39 +170,8 @@ exports.getDashboardStats = async (req, res) => {
 // F. GET ALL GURU (BESERTA MAPEL)
 exports.getAllGuru = async (req, res) => {
     try {
-        const supabase = require('../config/supabase'); // Pastikan path config benar
-
-        // 1. Ambil semua user dengan role guru & aktif
-        const { data: gurus, error } = await supabase
-            .from('users')
-            .select('id, nama, email, nisn')
-            .eq('role', 'guru')
-            .eq('is_active', true)
-            .order('nama', { ascending: true });
-
-        if (error) throw error;
-
-        // 2. Ambil data mapel untuk setiap guru (Manual Populate karena Supabase Join kadang tricky tanpa setup foreign key alias)
-        // Kita pakai Promise.all agar parallel dan cepat
-        const enrichedGurus = await Promise.all(gurus.map(async (guru) => {
-            const { data: mapels } = await supabase
-                .from('guru_mapel_kelas')
-                .select(`
-                    mata_pelajaran,
-                    classes (id, nama_kelas)
-                `)
-                .eq('id_guru', guru.id);
-            
-            // Format mapel jadi string yang enak dibaca frontend
-            // Contoh: "Matematika (10 A), Fisika (10 B)"
-            const mapelList = mapels.map(m => ({
-                id_kelas: m.classes?.id,
-                nama_kelas: m.classes?.nama_kelas,
-                mapel: m.mata_pelajaran
-            }));
-
-            return { ...guru, mengajar: mapelList };
-        }));
+        // Panggil Logic yang sudah dipindah ke Model
+        const enrichedGurus = await AdminGuruModel.getAllGuruWithMapel();
 
         res.status(200).json({
             status: 'success',
@@ -211,7 +180,7 @@ exports.getAllGuru = async (req, res) => {
 
     } catch (error) {
         console.error(error);
-        res.status(500).json({ message: "Gagal mengambil data guru" });
+        res.status(500).json({ message: "Gagal mengambil data guru: " + error.message });
     }
 };
 
@@ -306,5 +275,27 @@ exports.getPredictionsByClass = async (req, res) => {
     } catch (error) {
         console.error("Error getPredictionsByClass:", error.message);
         res.status(500).json({ message: "Gagal mengambil data prediksi siswa" });
+    }
+};
+
+// H. AMBIL RIWAYAT PENGIRIMAN
+exports.getDocHistory = async (req, res) => {
+    try {
+        const history = await AdminGuruModel.getBroadcastHistory();
+        res.status(200).json({ status: 'success', data: history });
+    } catch (error) {
+        console.error("History Error:", error);
+        res.status(500).json({ message: "Gagal memuat riwayat" });
+    }
+};
+
+// I. AMBIL DETAIL PENERIMA (POST karena ID bisa banyak)
+exports.getDocRecipients = async (req, res) => {
+    try {
+        const { ids } = req.body; // Array of user IDs
+        const recipients = await AdminGuruModel.getRecipientsDetail(ids);
+        res.status(200).json({ status: 'success', data: recipients });
+    } catch (error) {
+        res.status(500).json({ message: "Gagal memuat detail penerima" });
     }
 };

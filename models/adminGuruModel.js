@@ -160,7 +160,102 @@ const AdminGuruModel = {
         });
     
         return mergedData;
-      }
+    },
+    getAllGuruWithMapel: async () => {
+        // A. Ambil Data Guru
+        const { data: gurus, error } = await supabase
+            .from('users')
+            .select('id, nama, email, nisn')
+            .eq('role', 'guru')
+            .eq('is_active', true)
+            .order('nama', { ascending: true });
+
+        if (error) throw error;
+
+        // B. Populate Mapel (Parallel Processing)
+        const enrichedGurus = await Promise.all(gurus.map(async (guru) => {
+            const { data: mapels } = await supabase
+                .from('guru_mapel_kelas')
+                .select(`
+                    mata_pelajaran,
+                    classes (id, nama_kelas)
+                `)
+                .eq('id_guru', guru.id);
+            
+            // Formatting data
+            const mapelList = mapels.map(m => ({
+                id_kelas: m.classes?.id,
+                nama_kelas: m.classes?.nama_kelas,
+                mapel: m.mata_pelajaran
+            }));
+
+            return { ...guru, mengajar: mapelList };
+        }));
+
+        return enrichedGurus;
+    },
+
+    getBroadcastHistory: async () => {
+        // Kita group berdasarkan Link URL dan Judul untuk mendapatkan "Event Pengiriman"
+        // Catatan: Supabase/Postgres butuh GROUP BY untuk semua kolom non-agregat
+        // Kita ambil data unique berdasarkan link_url dan created_at (dibulatkan ke menit biar aman)
+        
+        const { data, error } = await supabase
+            .rpc('get_broadcast_history'); 
+            // Menggunakan RPC (Stored Procedure) lebih aman untuk query GROUP BY kompleks
+            // TAPI, untuk simpelnya di Node JS, kita tarik raw data lalu grouping di JS 
+            // karena membuat RPC butuh akses SQL Editor.
+            // OPSI JS (Lebih mudah diimplementasikan sekarang):
+            
+        return AdminGuruModel.getHistoryViaJS();
+    },
+
+    // Helper: Grouping di sisi aplikasi (karena keterbatasan akses RPC user)
+    getHistoryViaJS: async () => {
+        const { data, error } = await supabase
+            .from('notifications')
+            .select('id, judul, link_url, created_at, id_siswa')
+            .eq('tipe', 'download')
+            .order('created_at', { ascending: false });
+
+        if (error) throw error;
+
+        // Grouping Logic
+        const historyMap = new Map();
+
+        data.forEach(item => {
+            // Key grouping: Link URL + Jam (agar kalau kirim file sama di beda waktu tetap terpisah)
+            // Kita potong string waktu sampai menit (YYYY-MM-DDTHH:MM)
+            const timeKey = new Date(item.created_at).toISOString().slice(0, 16); 
+            const key = `${item.link_url}-${timeKey}`;
+
+            if (!historyMap.has(key)) {
+                historyMap.set(key, {
+                    judul: item.judul,
+                    link_url: item.link_url,
+                    created_at: item.created_at,
+                    recipients: [] // Array ID Guru
+                });
+            }
+            historyMap.get(key).recipients.push(item.id_siswa);
+        });
+
+        // Convert Map to Array
+        return Array.from(historyMap.values());
+    },
+
+    // 10. Ambil Detail Penerima berdasarkan List ID
+    getRecipientsDetail: async (recipientIds) => {
+        if (!recipientIds || recipientIds.length === 0) return [];
+
+        const { data, error } = await supabase
+            .from('users')
+            .select('nama, email')
+            .in('id', recipientIds);
+        
+        if (error) throw error;
+        return data;
+    }
     
 };
 
